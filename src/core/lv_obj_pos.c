@@ -35,7 +35,7 @@ static int32_t calc_content_height(lv_obj_t * obj);
 static void layout_update_core(lv_obj_t * obj);
 static void transform_point_array(const lv_obj_t * obj, lv_point_t * p, size_t p_count, bool inv);
 static bool is_transformed(const lv_obj_t * obj);
-
+static lv_obj_tree_walk_res_t update_layout_completed_cb(lv_obj_t * obj, void * user_data);
 /**********************
  *  STATIC VARIABLES
  **********************/
@@ -194,15 +194,20 @@ bool lv_obj_refr_size(lv_obj_t * obj)
         /**
          * If the object style (after clamping) results in a width that is defined as a percentage of the parent,
          * and if the parent's width is set to LV_SIZE_CONTENT and not managed by a layout, this object should not
-         * influence the parent's content width calculation. Thus, the `h_ignore_size` flag is set accordingly.
+         * influence the parent's content width calculation. Thus, the `w_ignore_size` flag is set accordingly.
          */
-        int32_t w_style = w == minw ? lv_obj_get_style_min_width(obj, LV_PART_MAIN)
-                          : (w == maxw ? lv_obj_get_style_max_width(obj, LV_PART_MAIN)
-                             : lv_obj_get_style_width(obj, LV_PART_MAIN));
+        int32_t w_style;
+        if(w == minw) {
+            w_style = lv_obj_get_style_min_width(obj, LV_PART_MAIN);
+        }
+        else if(w == maxw) {
+            w_style = lv_obj_get_style_max_width(obj, LV_PART_MAIN);
+        }
+        else {
+            w_style = lv_obj_get_style_width(obj, LV_PART_MAIN);
+        }
         obj->w_ignore_size =
-            (LV_COORD_IS_PCT(w_style) && parent->w_layout == 0 && lv_obj_get_style_width(parent, 0) == LV_SIZE_CONTENT)
-            ? 1
-            : 0;
+            (LV_COORD_IS_PCT(w_style) && parent->w_layout == 0 && lv_obj_get_style_width(parent, 0) == LV_SIZE_CONTENT);
     }
 
     int32_t h;
@@ -221,13 +226,18 @@ bool lv_obj_refr_size(lv_obj_t * obj)
          * and if the parent's height is set to LV_SIZE_CONTENT and not managed by a layout, this object should not
          * influence the parent's content height calculation. Thus, the `h_ignore_size` flag is set accordingly.
          */
-        int32_t h_style = h == minh ? lv_obj_get_style_min_height(obj, LV_PART_MAIN)
-                          : (h == maxh ? lv_obj_get_style_max_height(obj, LV_PART_MAIN)
-                             : lv_obj_get_style_height(obj, LV_PART_MAIN));
-        obj->h_ignore_size =
-            (LV_COORD_IS_PCT(h_style) && parent->h_layout == 0 && lv_obj_get_style_height(parent, 0) == LV_SIZE_CONTENT)
-            ? 1
-            : 0;
+        int32_t h_style;
+        if(h == minh) {
+            h_style = lv_obj_get_style_min_height(obj, LV_PART_MAIN);
+        }
+        else if(h == maxh) {
+            h_style = lv_obj_get_style_max_height(obj, LV_PART_MAIN);
+        }
+        else {
+            h_style = lv_obj_get_style_height(obj, LV_PART_MAIN);
+        }
+        obj->h_ignore_size = (LV_COORD_IS_PCT(h_style) && parent->h_layout == 0 &&
+                              lv_obj_get_style_height(parent, 0) == LV_SIZE_CONTENT);
     }
 
     /*Do nothing if the size is not changed*/
@@ -366,6 +376,12 @@ void lv_obj_mark_layout_as_dirty(lv_obj_t * obj)
     lv_display_send_event(disp, LV_EVENT_REFR_REQUEST, NULL);
 }
 
+void lv_obj_request_layout_complete_event(lv_obj_t * obj)
+{
+    lv_obj_t * scr = lv_obj_get_screen(obj);
+    scr->scr_layout_complete_pending = 1;
+}
+
 void lv_obj_update_layout(const lv_obj_t * obj)
 {
     if(update_layout_mutex) {
@@ -382,6 +398,11 @@ void lv_obj_update_layout(const lv_obj_t * obj)
         scr->scr_layout_inv = 0;
         layout_update_core(scr);
         LV_LOG_TRACE("Layout update end");
+    }
+
+    if(scr->scr_layout_complete_pending) {
+        scr->scr_layout_complete_pending = 0;
+        lv_obj_tree_walk(scr, update_layout_completed_cb, NULL);
     }
 
     update_layout_mutex = false;
@@ -1285,8 +1306,7 @@ static int32_t calc_content_width(lv_obj_t * obj)
             for(i = 0; i < child_cnt; i++) {
                 int32_t child_res_tmp = LV_COORD_MIN;
                 lv_obj_t * child = obj->spec_attr->children[i];
-                if(lv_obj_has_flag_any(child, LV_OBJ_FLAG_HIDDEN | LV_OBJ_FLAG_FLOATING))
-                    continue;
+                if(lv_obj_has_flag_any(child,  LV_OBJ_FLAG_HIDDEN | LV_OBJ_FLAG_FLOATING)) continue;
 
                 if(child->w_ignore_size)
                     continue;
@@ -1485,4 +1505,11 @@ static void transform_point_array(const lv_obj_t * obj, lv_point_t * p, size_t p
     }
 
     lv_point_array_transform(p, p_count, angle, scale_x, scale_y, &pivot, !inv);
+}
+
+static lv_obj_tree_walk_res_t update_layout_completed_cb(lv_obj_t * obj, void * user_data)
+{
+    LV_UNUSED(user_data);
+    lv_obj_send_event(obj, LV_EVENT_UPDATE_LAYOUT_COMPLETED, NULL);
+    return LV_OBJ_TREE_WALK_NEXT;
 }

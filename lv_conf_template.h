@@ -948,6 +948,9 @@
  *  - Supports complete JPEG specifications and high-performance JPEG decoding. */
 #define LV_USE_LIBJPEG_TURBO 0
 
+/** WebP decoder library */
+#define LV_USE_LIBWEBP 0
+
 /** GIF decoder library */
 #define LV_USE_GIF 0
 #if LV_USE_GIF
@@ -1451,9 +1454,6 @@
 
     /** Widget transformation demo */
     #define LV_USE_DEMO_TRANSFORM       0
-
-    /** Demonstrate scroll settings */
-    #define LV_USE_DEMO_SCROLL          0
 
     /*E-bike demo with Lottie animations (if LV_USE_LOTTIE is enabled)*/
     #define LV_USE_DEMO_EBIKE           0
