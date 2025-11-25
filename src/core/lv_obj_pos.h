@@ -334,7 +334,7 @@ void lv_obj_get_content_coords(const lv_obj_t * obj, lv_area_t * area);
 
 /**
  * Get the width occupied by the "parts" of the widget. E.g. the width of all columns of a table.
- * @param obj       pointer to an objects
+ * @param obj       pointer to an object
  * @return          the width of the virtually drawn content
  * @note            This size independent from the real size of the widget.
  *                  It just tells how large the internal ("virtual") content is.
@@ -343,7 +343,7 @@ int32_t lv_obj_get_self_width(const lv_obj_t * obj);
 
 /**
  * Get the height occupied by the "parts" of the widget. E.g. the height of all rows of a table.
- * @param obj       pointer to an objects
+ * @param obj       pointer to an object
  * @return          the width of the virtually drawn content
  * @note            This size independent from the real size of the widget.
  *                  It just tells how large the internal ("virtual") content is.
