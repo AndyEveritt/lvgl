@@ -81,7 +81,7 @@ Indent using 4 spaces (not tab characters).  This applies to code blocks as well
 
 If you create a new directory you will need an `index.rst` file in that directory and that index file needs to be pointed to in the `index.rst` file that is located in the parent directory.
 
-Let's take a look at the `index.rst` file that is located in the `docs/src/details/common-widget-features/layouts` directory.
+Let's take a look at the `index.rst` file that is located in the `docs/src/common-widget-features/layouts` directory.
 
 ```rst
 .. _layouts:
@@ -164,7 +164,7 @@ For improved readability in text editors:
 
 Emphasis using `*italics*`.  Emphasis using `**boldface**`.
 
-Normally underlining and combining these text styles is not possible in reStructuredText.  However, LVGL documentation provides a work-around for this using reST <u>Interpreted Text Roles</u>.  Just remember that the Interpreted Text Role names combine the letters `i`, `b` and `u` to provide the desired combination.  All possible permutations of these letters are supported so you do not have to remember what sequence works.  Examples:  ``:u:`underline` ``, ``:ub:`underline and bold` ``, `` `:bi:bold italic` ``.
+Normally underlining and combining these text styles is not possible in reStructuredText.  However, LVGL documentation provides a work-around for this using reST <u>Interpreted Text Roles</u>.  Just remember that the Interpreted Text Role names combine the letters `i`, `b` and `u` to provide the desired combination.  All possible permutations of these letters are supported so you do not have to remember what sequence works.  Examples:  ``:u:`underline` ``, ``:ub:`underline and bold` ``, `` :bi:`bold italic` ``.
 
 
 
