@@ -193,17 +193,12 @@ static int32_t dispatch(lv_draw_unit_t * draw_unit, lv_layer_t * layer)
     unsigned int texture = layer_get_texture(layer);
     if(texture == 0) {
         lv_display_t * disp = lv_refr_get_disp_refreshing();
-        if(layer != disp->layer_head) {
-            int32_t w = lv_area_get_width(&layer->buf_area);
-            int32_t h = lv_area_get_height(&layer->buf_area);
+        LV_ASSERT(layer != disp->layer_head);
+        int32_t w = lv_area_get_width(&layer->buf_area);
+        int32_t h = lv_area_get_height(&layer->buf_area);
 
-            texture = create_texture(w, h, NULL);
-
-            layer->user_data = (void *)(uintptr_t)texture;
-        }
-        else {
-            layer->user_data = (void *)(uintptr_t)lv_opengles_texture_get_texture_id(disp);
-        }
+        texture = create_texture(w, h, NULL);
+        layer->user_data = (void *)(uintptr_t)texture;
     }
 
     t->state = LV_DRAW_TASK_STATE_IN_PROGRESS;
@@ -635,7 +630,7 @@ static unsigned int create_texture(int32_t w, int32_t h, const void * data)
     /* LV_COLOR_DEPTH 32, 16 are supported but the cached textures will always
      * have full ARGB pixels since the alpha channel is required for blending.
      */
-    GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_BGRA, GL_UNSIGNED_BYTE, data));
+    GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data));
 #if 0
     GL_CALL(glGenerateMipmap(GL_TEXTURE_2D));
     GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 20));
@@ -677,7 +672,7 @@ static void lv_draw_opengles_3d(lv_draw_task_t * t, const lv_draw_3d_dsc_t * dsc
     lv_area_move(&clip_area, -dest_layer->buf_area.x1, -dest_layer->buf_area.y1);
 
     lv_opengles_render(dsc->tex_id, coords, dsc->opa, targ_tex_w, targ_tex_h, &clip_area, dsc->h_flip, !dsc->v_flip,
-                       lv_color_black(), true);
+                       lv_color_black(), true, false);
 
     if(target_texture) {
         GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));

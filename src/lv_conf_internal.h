@@ -33,6 +33,11 @@
 #define LV_NEMA_HAL_CUSTOM          0
 #define LV_NEMA_HAL_STM32           1
 
+#define LV_NANOVG_BACKEND_GL2       1
+#define LV_NANOVG_BACKEND_GL3       2
+#define LV_NANOVG_BACKEND_GLES2     3
+#define LV_NANOVG_BACKEND_GLES3     4
+
 /** Handle special Kconfig options. */
 #ifndef LV_KCONFIG_IGNORE
     #include "lv_conf_kconfig.h"
@@ -931,6 +936,15 @@
         #endif
     #endif
 
+    /** Disable blit rectangular offset to resolve certain hardware errors. */
+    #ifndef LV_VG_LITE_DISABLE_BLIT_RECT_OFFSET
+        #ifdef CONFIG_LV_VG_LITE_DISABLE_BLIT_RECT_OFFSET
+            #define LV_VG_LITE_DISABLE_BLIT_RECT_OFFSET CONFIG_LV_VG_LITE_DISABLE_BLIT_RECT_OFFSET
+        #else
+            #define LV_VG_LITE_DISABLE_BLIT_RECT_OFFSET 0
+        #endif
+    #endif
+
     /** Disable linear gradient extension for some older versions of drivers. */
     #ifndef LV_VG_LITE_DISABLE_LINEAR_GRADIENT_EXT
         #ifdef CONFIG_LV_VG_LITE_DISABLE_LINEAR_GRADIENT_EXT
@@ -1148,6 +1162,50 @@
             #define LV_DRAW_EVE_WRITE_BUFFER_SIZE CONFIG_LV_DRAW_EVE_WRITE_BUFFER_SIZE
         #else
             #define LV_DRAW_EVE_WRITE_BUFFER_SIZE 2048
+        #endif
+    #endif
+#endif
+
+/** Use NanoVG Renderer
+ * - Requires LV_USE_NANOVG, LV_USE_MATRIX.
+ */
+#ifndef LV_USE_DRAW_NANOVG
+    #ifdef CONFIG_LV_USE_DRAW_NANOVG
+        #define LV_USE_DRAW_NANOVG CONFIG_LV_USE_DRAW_NANOVG
+    #else
+        #define LV_USE_DRAW_NANOVG 0
+    #endif
+#endif
+#if LV_USE_DRAW_NANOVG
+    /** Select OpenGL backend for NanoVG:
+     * - LV_NANOVG_BACKEND_GL2:   OpenGL 2.0
+     * - LV_NANOVG_BACKEND_GL3:   OpenGL 3.0+
+     * - LV_NANOVG_BACKEND_GLES2: OpenGL ES 2.0
+     * - LV_NANOVG_BACKEND_GLES3: OpenGL ES 3.0+
+     */
+    #ifndef LV_NANOVG_BACKEND
+        #ifdef CONFIG_LV_NANOVG_BACKEND
+            #define LV_NANOVG_BACKEND CONFIG_LV_NANOVG_BACKEND
+        #else
+            #define LV_NANOVG_BACKEND   LV_NANOVG_BACKEND_GLES2
+        #endif
+    #endif
+
+    /** Draw image texture cache count. */
+    #ifndef LV_NANOVG_IMAGE_CACHE_CNT
+        #ifdef CONFIG_LV_NANOVG_IMAGE_CACHE_CNT
+            #define LV_NANOVG_IMAGE_CACHE_CNT CONFIG_LV_NANOVG_IMAGE_CACHE_CNT
+        #else
+            #define LV_NANOVG_IMAGE_CACHE_CNT 128
+        #endif
+    #endif
+
+    /** Draw letter texture cache count. */
+    #ifndef LV_NANOVG_LETTER_CACHE_CNT
+        #ifdef CONFIG_LV_NANOVG_LETTER_CACHE_CNT
+            #define LV_NANOVG_LETTER_CACHE_CNT CONFIG_LV_NANOVG_LETTER_CACHE_CNT
+        #else
+            #define LV_NANOVG_LETTER_CACHE_CNT 512
         #endif
     #endif
 #endif
@@ -3238,6 +3296,15 @@
     #endif
 #endif
 
+/** Enable NanoVG (vector graphics library) */
+#ifndef LV_USE_NANOVG
+    #ifdef CONFIG_LV_USE_NANOVG
+        #define LV_USE_NANOVG CONFIG_LV_USE_NANOVG
+    #else
+        #define LV_USE_NANOVG 0
+    #endif
+#endif
+
 /** Use lvgl built-in LZ4 lib */
 #ifndef LV_USE_LZ4_INTERNAL
     #ifdef CONFIG_LV_USE_LZ4_INTERNAL
@@ -4503,6 +4570,15 @@
     #endif
 #endif
 
+/** Enable or disable for external data and destructor function */
+#ifndef LV_USE_EXT_DATA
+    #ifdef CONFIG_LV_USE_EXT_DATA
+        #define LV_USE_EXT_DATA CONFIG_LV_USE_EXT_DATA
+    #else
+        #define LV_USE_EXT_DATA   0
+    #endif
+#endif
+
 /*=====================
 * BUILD OPTIONS
 *======================*/
@@ -4759,16 +4835,23 @@ LV_EXPORT_CONST_INT(LV_DRAW_BUF_ALIGN);
 
 #if LV_USE_WAYLAND
     /*Automatically detect wayland backend*/
-    #if LV_USE_G2D
+    #if LV_USE_OPENGLES
+        #define LV_WAYLAND_USE_EGL 1
+        #define LV_WAYLAND_USE_G2D 0
+        #define LV_WAYLAND_USE_SHM 0
+    #elif LV_USE_G2D
+        #define LV_WAYLAND_USE_EGL 0
         #define LV_WAYLAND_USE_G2D 1
         #define LV_WAYLAND_USE_SHM 0
     #else
+        #define LV_WAYLAND_USE_EGL 0
         #define LV_WAYLAND_USE_G2D 0
         #define LV_WAYLAND_USE_SHM 1
     #endif
 #else
     #define LV_WAYLAND_USE_G2D 0
     #define LV_WAYLAND_USE_SHM 0
+    #define LV_WAYLAND_USE_EGL 0
 #endif
 
 #if LV_USE_LINUX_DRM == 0
@@ -4798,6 +4881,7 @@ LV_EXPORT_CONST_INT(LV_DRAW_BUF_ALIGN);
     #define LV_USE_DEMO_EBIKE           0
     #define LV_USE_DEMO_HIGH_RES        0
     #define LV_USE_DEMO_SMARTWATCH      0
+    #define LV_USE_DEMO_GLTF            0
 #endif /* LV_BUILD_DEMOS */
 
 #ifndef LV_USE_LZ4
@@ -4817,7 +4901,11 @@ LV_EXPORT_CONST_INT(LV_DRAW_BUF_ALIGN);
 #endif
 
 #ifndef LV_USE_EGL
-    #define LV_USE_EGL LV_LINUX_DRM_USE_EGL
+    #if LV_LINUX_DRM_USE_EGL || LV_WAYLAND_USE_EGL
+        #define LV_USE_EGL 1
+    #else
+        #define LV_USE_EGL 0
+    #endif
 #endif /* LV_USE_EGL */
 
 #if LV_USE_OS
