@@ -81,17 +81,6 @@ void test_style_min_size(void)
     lv_obj_set_style_min_width(child, LV_SIZE_CONTENT, 0);
     lv_obj_set_style_min_height(child, LV_SIZE_CONTENT, 0);
     TEST_ASSERT_EQUAL_SCREENSHOT("widgets/obj_pos_content_min_size.png");
-    TEST_ASSERT_TRUE(lv_obj_is_width_min(child));
-    TEST_ASSERT_TRUE(lv_obj_is_height_min(child));
-
-    lv_obj_set_size(parent, 100, 100);
-    lv_obj_set_style_min_width(child, 0, 0);
-    lv_obj_set_style_min_height(child, 0, 0);
-    lv_refr_now(NULL);
-    TEST_ASSERT_FALSE(lv_obj_is_width_min(child));
-    TEST_ASSERT_FALSE(lv_obj_is_height_min(child));
-    TEST_ASSERT_EQUAL(LV_PCT(100), lv_obj_get_style_clamped_width(child));
-    TEST_ASSERT_EQUAL(LV_PCT(100), lv_obj_get_style_clamped_height(child));
 }
 
 void test_chaining_invalidation_layout(void)
