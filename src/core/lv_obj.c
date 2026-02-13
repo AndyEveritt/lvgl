@@ -355,6 +355,12 @@ void lv_obj_set_state(lv_obj_t * obj, lv_state_t state, bool v)
     else lv_obj_remove_state(obj, state);
 }
 
+void lv_obj_set_radio_button(lv_obj_t * obj, bool en)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    obj->radio_button = en;
+}
+
 /*=======================
  * Getter functions
  *======================*/
@@ -385,6 +391,12 @@ bool lv_obj_has_state(const lv_obj_t * obj, lv_state_t state)
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
     return !!(obj->state & state);
+}
+
+bool lv_obj_is_radio_button(const lv_obj_t * obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    return obj->radio_button;
 }
 
 lv_group_t * lv_obj_get_group(const lv_obj_t * obj)
@@ -594,9 +606,9 @@ static void lv_obj_destructor(const lv_obj_class_t * class_p, lv_obj_t * obj)
     lv_event_mark_deleted(obj);
 
     /*Remove all style*/
-    lv_obj_enable_style_refresh(false); /*No need to refresh the style because the object will be deleted*/
+    lv_obj_enable_style_refresh(obj, false); /*No need to refresh the style because the object will be deleted*/
     lv_obj_remove_style_all(obj);
-    lv_obj_enable_style_refresh(true);
+    lv_obj_enable_style_refresh(obj, true);
 
     /*Remove the animations from this object*/
     lv_anim_delete(obj, NULL);
@@ -862,7 +874,7 @@ static void lv_obj_event(const lv_obj_class_t * class_p, lv_event_t * e)
                 lv_obj_add_state(obj, LV_STATE_CHECKED);
             }
             /*Radio buttons can't be checked off directly*/
-            else if(!lv_obj_has_flag(obj, LV_OBJ_FLAG_RADIO_BUTTON)) {
+            else if(!lv_obj_is_radio_button(obj)) {
                 lv_obj_remove_state(obj, LV_STATE_CHECKED);
             }
             if(was_checked != lv_obj_has_state(obj, LV_STATE_CHECKED)) {
@@ -872,7 +884,7 @@ static void lv_obj_event(const lv_obj_class_t * class_p, lv_event_t * e)
         }
     }
     else if(code == LV_EVENT_VALUE_CHANGED) {
-        if(lv_obj_has_flag(obj, LV_OBJ_FLAG_RADIO_BUTTON) && lv_obj_has_state(obj, LV_STATE_CHECKED)) {
+        if(lv_obj_is_radio_button(obj) && lv_obj_has_state(obj, LV_STATE_CHECKED)) {
             lv_obj_t * parent = lv_obj_get_parent(obj);
             if(parent) {
                 uint32_t child_cnt = lv_obj_get_child_count(parent);
@@ -881,7 +893,7 @@ static void lv_obj_event(const lv_obj_class_t * class_p, lv_event_t * e)
                     lv_obj_t * sibling = lv_obj_get_child(parent, i);
                     if(obj == sibling) continue;
 
-                    if(lv_obj_has_flag(sibling, LV_OBJ_FLAG_RADIO_BUTTON) && lv_obj_has_state(sibling, LV_STATE_CHECKED)) {
+                    if(lv_obj_is_radio_button(sibling) && lv_obj_has_state(sibling, LV_STATE_CHECKED)) {
                         lv_obj_remove_state(sibling, LV_STATE_CHECKED);
                         lv_result_t res = lv_obj_send_event(sibling, LV_EVENT_VALUE_CHANGED, NULL);
                         if(res != LV_RESULT_OK) return;
@@ -909,7 +921,7 @@ static void lv_obj_event(const lv_obj_class_t * class_p, lv_event_t * e)
             }
             else if(c == LV_KEY_LEFT || c == LV_KEY_DOWN) {
                 /*Radio buttons can't be checked off directly*/
-                if(!lv_obj_has_flag(obj, LV_OBJ_FLAG_RADIO_BUTTON)) {
+                if(!lv_obj_is_radio_button(obj)) {
                     lv_obj_remove_state(obj, LV_STATE_CHECKED);
                 }
             }
