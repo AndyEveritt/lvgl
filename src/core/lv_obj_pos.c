@@ -30,8 +30,8 @@
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-static int32_t calc_content_width(lv_obj_t * obj);
-static int32_t calc_content_height(lv_obj_t * obj);
+static int32_t calc_content_width(const lv_obj_t * obj);
+static int32_t calc_content_height(const lv_obj_t * obj);
 static void layout_update_core(lv_obj_t * obj);
 static void transform_point_array(const lv_obj_t * obj, lv_point_t * p, size_t p_count, bool inv);
 static bool is_transformed(const lv_obj_t * obj);
@@ -97,7 +97,7 @@ void lv_obj_set_y(lv_obj_t * obj, int32_t y)
  * @note If the style width is `LV_SIZE_CONTENT`, the content width is calculated and returned.
  * @note If the style width is a `LV_PCT()`, the percentage is applied to the parent's width.
  */
-static int32_t calc_dynamic_width(lv_obj_t * obj, lv_style_prop_t prop, int32_t * const content_width)
+static int32_t calc_dynamic_width(const lv_obj_t * obj, lv_style_prop_t prop, int32_t * const content_width)
 {
     LV_ASSERT(prop == LV_STYLE_WIDTH || prop == LV_STYLE_MIN_WIDTH || prop == LV_STYLE_MAX_WIDTH);
 
@@ -123,7 +123,7 @@ static int32_t calc_dynamic_width(lv_obj_t * obj, lv_style_prop_t prop, int32_t 
     return width;
 }
 
-int32_t lv_obj_calc_dynamic_width(lv_obj_t * obj, lv_style_prop_t prop)
+int32_t lv_obj_calc_dynamic_width(const lv_obj_t * obj, lv_style_prop_t prop)
 {
     return calc_dynamic_width(obj, prop, NULL);
 }
@@ -140,7 +140,7 @@ int32_t lv_obj_calc_dynamic_width(lv_obj_t * obj, lv_style_prop_t prop)
  * @note If the style height is `LV_SIZE_CONTENT`, the content height is calculated and returned.
  * @note If the style height is a `LV_PCT()`, the percentage is applied to the parent's height.
  */
-static int32_t calc_dynamic_height(lv_obj_t * obj, lv_style_prop_t prop, int32_t * const content_height)
+static int32_t calc_dynamic_height(const lv_obj_t * obj, lv_style_prop_t prop, int32_t * const content_height)
 {
     LV_ASSERT(prop == LV_STYLE_HEIGHT || prop == LV_STYLE_MIN_HEIGHT || prop == LV_STYLE_MAX_HEIGHT);
 
@@ -166,7 +166,7 @@ static int32_t calc_dynamic_height(lv_obj_t * obj, lv_style_prop_t prop, int32_t
     return height;
 }
 
-int32_t lv_obj_calc_dynamic_height(lv_obj_t * obj, lv_style_prop_t prop)
+int32_t lv_obj_calc_dynamic_height(const lv_obj_t * obj, lv_style_prop_t prop)
 {
     return calc_dynamic_height(obj, prop, NULL);
 }
@@ -181,70 +181,120 @@ bool lv_obj_refr_size(lv_obj_t * obj)
     lv_obj_t * parent = lv_obj_get_parent(obj);
     if(parent == NULL) return false;
 
+    if(lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) {
+        LV_LOG_TRACE("Object '%s' is not visible - skipping refr_size", LV_OBJ_NAME(obj));
+        return false;
+    }
+
+    /*Save old ignore flags so we can detect changes*/
+    uint8_t old_w_ignore = obj->w_ignore_size;
+    uint8_t old_h_ignore = obj->h_ignore_size;
+
     int32_t w;
+    int32_t content_width = -1;
+    int32_t minw = calc_dynamic_width(obj, LV_STYLE_MIN_WIDTH, &content_width);
+    int32_t maxw = calc_dynamic_width(obj, LV_STYLE_MAX_WIDTH, &content_width);
+    int32_t w_style = 0;
     if(obj->w_layout) {
         w = lv_obj_get_width(obj);
-    }
-    else {
-        int32_t content_width = -1;
-        w = calc_dynamic_width(obj, LV_STYLE_WIDTH, &content_width);
-        int32_t minw = calc_dynamic_width(obj, LV_STYLE_MIN_WIDTH, &content_width);
-        int32_t maxw = calc_dynamic_width(obj, LV_STYLE_MAX_WIDTH, &content_width);
-        w = LV_CLAMP(minw, w, maxw);
 
-        /**
-         * If the object style (after clamping) results in a width that is defined as a percentage of the parent,
-         * and if the parent's width is set to LV_SIZE_CONTENT and not managed by a layout, this object should not
-         * influence the parent's content width calculation. Thus, the `w_ignore_size` flag is set accordingly.
-         */
-        int32_t w_style;
-        if(w == minw) {
+        if(w <= minw) {
             w_style = lv_obj_get_style_min_width(obj, LV_PART_MAIN);
         }
-        else if(w == maxw) {
+        else if(w >= maxw) {
+            w_style = lv_obj_get_style_max_width(obj, LV_PART_MAIN);
+        }
+    }
+    else {
+        w = calc_dynamic_width(obj, LV_STYLE_WIDTH, &content_width);
+
+        if(w <= minw) {
+            w_style = lv_obj_get_style_min_width(obj, LV_PART_MAIN);
+        }
+        else if(w >= maxw) {
             w_style = lv_obj_get_style_max_width(obj, LV_PART_MAIN);
         }
         else {
             w_style = lv_obj_get_style_width(obj, LV_PART_MAIN);
         }
-        obj->w_ignore_size =
-            (LV_COORD_IS_PCT(w_style) && parent->w_layout == 0 && lv_obj_get_style_width(parent, 0) == LV_SIZE_CONTENT);
+        w = LV_CLAMP(minw, w, maxw);
     }
+    /**
+     * If the object style (after clamping) results in a width that is defined as a percentage of the parent,
+     * when the parent does a LV_SIZE_CONTENT calculation, this object should not influence the parent's content width
+     * calculation. Thus, the `w_ignore_size` flag is set accordingly.
+     */
+    obj->w_ignore_size = LV_COORD_IS_PCT(w_style);
 
+    int32_t content_height = -1;
     int32_t h;
+    int32_t minh = calc_dynamic_height(obj, LV_STYLE_MIN_HEIGHT, &content_height);
+    int32_t maxh = calc_dynamic_height(obj, LV_STYLE_MAX_HEIGHT, &content_height);
+    int32_t h_style = 0;
     if(obj->h_layout) {
         h = lv_obj_get_height(obj);
-    }
-    else {
-        int32_t content_height = -1;
-        h = calc_dynamic_height(obj, LV_STYLE_HEIGHT, &content_height);
-        int32_t minh = calc_dynamic_height(obj, LV_STYLE_MIN_HEIGHT, &content_height);
-        int32_t maxh = calc_dynamic_height(obj, LV_STYLE_MAX_HEIGHT, &content_height);
-        h = LV_CLAMP(minh, h, maxh);
 
-        /**
-         * If the object style (after clamping) results in a height that is defined as a percentage of the parent,
-         * and if the parent's height is set to LV_SIZE_CONTENT and not managed by a layout, this object should not
-         * influence the parent's content height calculation. Thus, the `h_ignore_size` flag is set accordingly.
-         */
-        int32_t h_style;
-        if(h == minh) {
+        if(h <= minh) {
             h_style = lv_obj_get_style_min_height(obj, LV_PART_MAIN);
         }
-        else if(h == maxh) {
+        else if(h >= maxh) {
+            h_style = lv_obj_get_style_max_height(obj, LV_PART_MAIN);
+        }
+    }
+    else {
+        h = calc_dynamic_height(obj, LV_STYLE_HEIGHT, &content_height);
+
+        if(h <= minh) {
+            h_style = lv_obj_get_style_min_height(obj, LV_PART_MAIN);
+        }
+        else if(h >= maxh) {
             h_style = lv_obj_get_style_max_height(obj, LV_PART_MAIN);
         }
         else {
             h_style = lv_obj_get_style_height(obj, LV_PART_MAIN);
         }
-        obj->h_ignore_size = (LV_COORD_IS_PCT(h_style) && parent->h_layout == 0 &&
-                              lv_obj_get_style_height(parent, 0) == LV_SIZE_CONTENT);
+        h = LV_CLAMP(minh, h, maxh);
     }
+    /**
+     * If the object style (after clamping) results in a height that is defined as a percentage of the parent,
+     * when the parent does a LV_SIZE_CONTENT calculation, this object should not influence the parent's content height
+     * calculation. Thus, the `h_ignore_size` flag is set accordingly.
+     */
+    obj->h_ignore_size = LV_COORD_IS_PCT(h_style);
+
+    LV_LOG_TRACE("refr_size: obj '%s', height = %d, min = %d, max = %d, ignore = %d%s",
+                 LV_OBJ_NAME(obj),
+                 h,
+                 minh,
+                 maxh,
+                 obj->h_ignore_size,
+                 obj->h_layout ? " (layout)" : "");
 
     /*Do nothing if the size is not changed*/
     /*It is very important else recursive resizing can occur without size change*/
-    if(lv_obj_get_width(obj) == w && lv_obj_get_height(obj) == h)
+    if(lv_obj_get_width(obj) == w && lv_obj_get_height(obj) == h) {
+        /*If the ignore flags changed, the parent's content size calculation will
+         *produce a different result even though this object's size didn't change.
+         *Mark the parent dirty so it recalculates on the next layout pass.*/
+        if(obj->w_ignore_size != old_w_ignore || obj->h_ignore_size != old_h_ignore) {
+            LV_LOG_TRACE("Object '%s' ignore size changed (w_ignore_size: %d -> %d, h_ignore_size: %d -> %d), marking parent "
+                         "layout dirty",
+                         LV_OBJ_NAME(obj),
+                         old_w_ignore,
+                         obj->w_ignore_size,
+                         old_h_ignore,
+                         obj->h_ignore_size);
+            lv_obj_send_event(parent, LV_EVENT_CHILD_CHANGED, obj);
+        }
         return false;
+    }
+
+    LV_LOG_TRACE("Object '%s' size changed, (%d, %d) -> (%d, %d), marking layout dirty",
+                 LV_OBJ_NAME(obj),
+                 lv_obj_get_width(obj),
+                 lv_obj_get_height(obj),
+                 w,
+                 h);
 
     /*Invalidate the original area*/
     lv_obj_invalidate(obj);
@@ -349,6 +399,7 @@ void lv_obj_set_layout(lv_obj_t * obj, uint32_t layout)
 
     lv_obj_set_style_layout(obj, layout, 0);
 
+    LV_LOG_TRACE("Object '%s' layout set to %d, marking layout dirty", LV_OBJ_NAME(obj), layout);
     lv_obj_mark_layout_as_dirty(obj);
 }
 
@@ -364,17 +415,40 @@ bool lv_obj_is_layout_positioned(const lv_obj_t * obj)
     else return false;
 }
 
+bool lv_obj_is_width_layout_positioned(const lv_obj_t * obj)
+{
+    return obj->w_layout;
+}
+
+bool lv_obj_is_height_layout_positioned(const lv_obj_t * obj)
+{
+    return obj->h_layout;
+}
+
 void lv_obj_mark_layout_as_dirty(lv_obj_t * obj)
 {
+    LV_PROFILER_LAYOUT_BEGIN;
+    LV_LOG_TRACE("Marking obj '%s' layout as dirty", LV_OBJ_NAME(obj));
+
     obj->layout_inv = 1;
 
     /*Propagate the subtree-dirty flag up to the screen so that
-     *layout_update_core can skip entire clean subtrees.*/
+     *layout_update_core can skip entire clean subtrees.
+     *
+     *We can only stop early when both subtree_layout_inv AND layout_inv
+     *are already set on an ancestor.  During an active layout pass
+     *layout_update_core clears layout_inv while subtree_layout_inv may
+     *remain set.  If we stopped on subtree_layout_inv alone we would
+     *leave ancestors with layout_inv == 0, so they would never
+     *re-run their own layout even though a descendant's content
+     *dimensions changed (e.g. a child's h_ignore_size flag toggled).*/
     lv_obj_t * cur = obj;
     while(cur) {
-        if(cur->scr_layout_inv)
-            break; /*Ancestors already marked*/
-        cur->scr_layout_inv = 1;
+        if(cur->subtree_layout_inv && cur->layout_inv)
+            break; /*Both flags already propagated above*/
+
+        cur->subtree_layout_inv = 1;
+        cur->layout_inv = 1;
         cur = lv_obj_get_parent(cur);
     }
 
@@ -382,6 +456,7 @@ void lv_obj_mark_layout_as_dirty(lv_obj_t * obj)
     lv_obj_t * scr = lv_obj_get_screen(obj);
     lv_display_t * disp = lv_obj_get_display(scr);
     lv_display_send_event(disp, LV_EVENT_REFR_REQUEST, NULL);
+    LV_PROFILER_LAYOUT_END;
 }
 
 void lv_obj_update_layout(const lv_obj_t * obj)
@@ -395,7 +470,7 @@ void lv_obj_update_layout(const lv_obj_t * obj)
 
     lv_obj_t * scr = lv_obj_get_screen(obj);
     /*Repeat until there are no more layout invalidations*/
-    while(scr->scr_layout_inv) {
+    while(scr->subtree_layout_inv) {
         LV_LOG_TRACE("Layout update begin");
         layout_update_core(scr);
         LV_LOG_TRACE("Layout update end");
@@ -693,7 +768,7 @@ int32_t lv_obj_get_self_height(const lv_obj_t * obj)
     return p.y;
 }
 
-int32_t lv_obj_get_style_clamped_width(lv_obj_t * obj)
+int32_t lv_obj_get_style_clamped_width(const lv_obj_t * obj)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
@@ -713,7 +788,7 @@ int32_t lv_obj_get_style_clamped_width(lv_obj_t * obj)
     return w;
 }
 
-int32_t lv_obj_get_style_clamped_height(lv_obj_t * obj)
+int32_t lv_obj_get_style_clamped_height(const lv_obj_t * obj)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
@@ -733,7 +808,7 @@ int32_t lv_obj_get_style_clamped_height(lv_obj_t * obj)
     return h;
 }
 
-bool lv_obj_is_style_any_width_content(lv_obj_t * obj)
+bool lv_obj_is_style_any_width_content(const lv_obj_t * obj)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
@@ -743,7 +818,7 @@ bool lv_obj_is_style_any_width_content(lv_obj_t * obj)
     return (w == LV_SIZE_CONTENT || minw == LV_SIZE_CONTENT || maxw == LV_SIZE_CONTENT);
 }
 
-bool lv_obj_is_style_any_height_content(lv_obj_t * obj)
+bool lv_obj_is_style_any_height_content(const lv_obj_t * obj)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
@@ -753,7 +828,7 @@ bool lv_obj_is_style_any_height_content(lv_obj_t * obj)
     return (h == LV_SIZE_CONTENT || minh == LV_SIZE_CONTENT || maxh == LV_SIZE_CONTENT);
 }
 
-bool lv_obj_is_width_min(lv_obj_t * obj)
+bool lv_obj_is_width_min(const lv_obj_t * obj)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
@@ -762,7 +837,7 @@ bool lv_obj_is_width_min(lv_obj_t * obj)
     return w == minw;
 }
 
-bool lv_obj_is_height_min(lv_obj_t * obj)
+bool lv_obj_is_height_min(const lv_obj_t * obj)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
@@ -771,7 +846,7 @@ bool lv_obj_is_height_min(lv_obj_t * obj)
     return h == minh;
 }
 
-bool lv_obj_is_width_max(lv_obj_t * obj)
+bool lv_obj_is_width_max(const lv_obj_t * obj)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
@@ -780,7 +855,7 @@ bool lv_obj_is_width_max(lv_obj_t * obj)
     return w == maxw;
 }
 
-bool lv_obj_is_height_max(lv_obj_t * obj)
+bool lv_obj_is_height_max(const lv_obj_t * obj)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
@@ -789,11 +864,34 @@ bool lv_obj_is_height_max(lv_obj_t * obj)
     return h == maxh;
 }
 
+bool lv_obj_is_width_clamped(const lv_obj_t * obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+
+    int32_t content_width = -1;
+    int32_t w = lv_obj_get_width(obj);
+    int32_t minw = calc_dynamic_width(obj, LV_STYLE_MIN_WIDTH, &content_width);
+    int32_t maxw = calc_dynamic_width(obj, LV_STYLE_MAX_WIDTH, &content_width);
+    return w == minw || w == maxw;
+}
+
+bool lv_obj_is_height_clamped(const lv_obj_t * obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+
+    int32_t content_height = -1;
+    int32_t h = lv_obj_get_height(obj);
+    int32_t minh = calc_dynamic_height(obj, LV_STYLE_MIN_HEIGHT, &content_height);
+    int32_t maxh = calc_dynamic_height(obj, LV_STYLE_MAX_HEIGHT, &content_height);
+    return h == minh || h == maxh;
+}
+
 bool lv_obj_refresh_self_size(lv_obj_t * obj)
 {
     if(!lv_obj_is_style_any_width_content(obj) && !lv_obj_is_style_any_height_content(obj))
         return false;
 
+    LV_LOG_TRACE("Refreshing self size of obj '%s'", LV_OBJ_NAME(obj));
     /**
      * Refresh the parent's layout, because the childs size is in some way dependent on its contents we need to force a
      * recalculation of the parents layout
@@ -810,7 +908,8 @@ bool lv_obj_refresh_self_size(lv_obj_t * obj)
 
 void lv_obj_refr_pos(lv_obj_t * obj)
 {
-    if(lv_obj_is_layout_positioned(obj)) return;
+    if(lv_obj_is_layout_positioned(obj))
+        return;
 
     lv_obj_t * parent = lv_obj_get_parent(obj);
     int32_t x = lv_obj_get_style_x(obj, LV_PART_MAIN);
@@ -825,12 +924,15 @@ void lv_obj_refr_pos(lv_obj_t * obj)
     int32_t pw = lv_obj_get_content_width(parent);
     int32_t ph = lv_obj_get_content_height(parent);
     if(LV_COORD_IS_PCT(x)) {
-        if(lv_obj_get_style_width(parent, LV_PART_MAIN) == LV_SIZE_CONTENT) x = 0; /*Avoid circular dependency*/
-        else x = (pw * LV_COORD_GET_PCT(x)) / 100;
+        if(lv_obj_get_style_clamped_width(parent) == LV_SIZE_CONTENT)
+            x = 0; /*Avoid circular dependency*/
+        else
+            x = (pw * LV_COORD_GET_PCT(x)) / 100;
     }
 
     if(LV_COORD_IS_PCT(y)) {
-        if(lv_obj_get_style_height(parent, LV_PART_MAIN) == LV_SIZE_CONTENT) y = 0; /*Avoid circular dependency*/
+        if(lv_obj_get_style_clamped_height(parent) == LV_SIZE_CONTENT)
+            y = 0; /*Avoid circular dependency*/
         y = (ph * LV_COORD_GET_PCT(y)) / 100;
     }
 
@@ -839,8 +941,10 @@ void lv_obj_refr_pos(lv_obj_t * obj)
     int32_t tr_y = lv_obj_get_style_translate_y(obj, LV_PART_MAIN);
     int32_t w = lv_obj_get_width(obj);
     int32_t h = lv_obj_get_height(obj);
-    if(LV_COORD_IS_PCT(tr_x)) tr_x = (w * LV_COORD_GET_PCT(tr_x)) / 100;
-    if(LV_COORD_IS_PCT(tr_y)) tr_y = (h * LV_COORD_GET_PCT(tr_y)) / 100;
+    if(LV_COORD_IS_PCT(tr_x))
+        tr_x = (w * LV_COORD_GET_PCT(tr_x)) / 100;
+    if(LV_COORD_IS_PCT(tr_y))
+        tr_y = (h * LV_COORD_GET_PCT(tr_y)) / 100;
 
     /*Use the translation*/
     x += tr_x;
@@ -944,7 +1048,8 @@ void lv_obj_move_to(lv_obj_t * obj, int32_t x, int32_t y)
     /*Do nothing if the position is not changed*/
     /*It is very important else recursive positioning can
      *occur without position change*/
-    if(diff.x == 0 && diff.y == 0) return;
+    if(diff.x == 0 && diff.y == 0)
+        return;
 
     /*Invalidate the original area*/
     lv_obj_invalidate(obj);
@@ -962,7 +1067,8 @@ void lv_obj_move_to(lv_obj_t * obj, int32_t x, int32_t y)
         /*If the object is already out of the parent and its position is changes
          *surely the scrollbars also changes so invalidate them*/
         on1 = lv_area_is_in(&ori, &parent_fit_area, 0);
-        if(!on1) lv_obj_scrollbar_invalidate(parent);
+        if(!on1)
+            lv_obj_scrollbar_invalidate(parent);
     }
 
     obj->coords.x1 += diff.x;
@@ -973,7 +1079,8 @@ void lv_obj_move_to(lv_obj_t * obj, int32_t x, int32_t y)
     lv_obj_move_children_by(obj, diff.x, diff.y, false);
 
     /*Call the ancestor's event handler to the parent too*/
-    if(parent) lv_obj_send_event(parent, LV_EVENT_CHILD_CHANGED, obj);
+    if(parent)
+        lv_obj_send_event(parent, LV_EVENT_CHILD_CHANGED, obj);
 
     /*Invalidate the new area*/
     lv_obj_invalidate(obj);
@@ -982,7 +1089,8 @@ void lv_obj_move_to(lv_obj_t * obj, int32_t x, int32_t y)
      *If it wasn't out of the parent but out now, also invalidate the scrollbars*/
     if(parent) {
         bool on2 = lv_area_is_in(&obj->coords, &parent_fit_area, 0);
-        if(on1 || (!on1 && on2)) lv_obj_scrollbar_invalidate(parent);
+        if(on1 || (!on1 && on2))
+            lv_obj_scrollbar_invalidate(parent);
     }
 }
 
@@ -992,7 +1100,10 @@ void lv_obj_move_children_by(lv_obj_t * obj, int32_t x_diff, int32_t y_diff, boo
     uint32_t child_cnt = lv_obj_get_child_count(obj);
     for(i = 0; i < child_cnt; i++) {
         lv_obj_t * child = obj->spec_attr->children[i];
-        if(ignore_floating && lv_obj_has_flag(child, LV_OBJ_FLAG_FLOATING)) continue;
+        if(ignore_floating && lv_obj_has_flag(child, LV_OBJ_FLAG_FLOATING))
+            continue;
+
+        LV_LOG_TRACE("Moving child '%s' of obj '%s' by (%d, %d)", LV_OBJ_NAME(child), LV_OBJ_NAME(obj), x_diff, y_diff);
         child->coords.x1 += x_diff;
         child->coords.y1 += y_diff;
         child->coords.x2 += x_diff;
@@ -1007,7 +1118,9 @@ void lv_obj_transform_point(const lv_obj_t * obj, lv_point_t * p, lv_obj_point_t
     lv_obj_transform_point_array(obj, p, 1, flags);
 }
 
-void lv_obj_transform_point_array(const lv_obj_t * obj, lv_point_t points[], size_t count,
+void lv_obj_transform_point_array(const lv_obj_t * obj,
+                                  lv_point_t points[],
+                                  size_t count,
                                   lv_obj_point_transform_flag_t flags)
 {
     if(obj) {
@@ -1016,12 +1129,16 @@ void lv_obj_transform_point_array(const lv_obj_t * obj, lv_point_t points[], siz
         bool recursive = flags & LV_OBJ_POINT_TRANSFORM_FLAG_RECURSIVE;
         bool inverse = flags & LV_OBJ_POINT_TRANSFORM_FLAG_INVERSE;
         if(inverse) {
-            if(recursive) lv_obj_transform_point_array(lv_obj_get_parent(obj), points, count, flags);
-            if(do_tranf) transform_point_array(obj, points, count, inverse);
+            if(recursive)
+                lv_obj_transform_point_array(lv_obj_get_parent(obj), points, count, flags);
+            if(do_tranf)
+                transform_point_array(obj, points, count, inverse);
         }
         else {
-            if(do_tranf) transform_point_array(obj, points, count, inverse);
-            if(recursive) lv_obj_transform_point_array(lv_obj_get_parent(obj), points, count, flags);
+            if(do_tranf)
+                transform_point_array(obj, points, count, inverse);
+            if(recursive)
+                lv_obj_transform_point_array(lv_obj_get_parent(obj), points, count, flags);
         }
     }
 }
@@ -1051,7 +1168,8 @@ typedef struct {
 static lv_obj_tree_walk_res_t blur_walk_cb(lv_obj_t * obj, void * user_data)
 {
     blur_walk_data_t * blur_data = user_data;
-    if(obj == blur_data->requester_obj) return LV_OBJ_TREE_WALK_SKIP_CHILDREN;
+    if(obj == blur_data->requester_obj)
+        return LV_OBJ_TREE_WALK_SKIP_CHILDREN;
 
     /*Truncate the area to the object*/
     lv_area_t obj_coords;
@@ -1073,10 +1191,12 @@ static lv_obj_tree_walk_res_t blur_walk_cb(lv_obj_t * obj, void * user_data)
         uint32_t i;
         for(i = 0; i < obj->style_cnt; i++) {
             lv_obj_style_t * obj_style = &obj->styles[i];
-            if(obj_style->is_disabled) continue;
+            if(obj_style->is_disabled)
+                continue;
 
             lv_state_t state_style = lv_obj_style_get_selector_state(obj->styles[i].selector);
-            if((state_style & state_inv)) continue;
+            if((state_style & state_inv))
+                continue;
 
             bool invalidation_needed = false;
             if((obj_style->style->has_group & group_blur) &&
@@ -1088,7 +1208,8 @@ static lv_obj_tree_walk_res_t blur_walk_cb(lv_obj_t * obj, void * user_data)
                 invalidation_needed = true;
             }
 
-            if(invalidation_needed == false) continue;
+            if(invalidation_needed == false)
+                continue;
 
             /*Truncate the area to the object*/
             ext_size = lv_obj_get_ext_draw_size(obj);
@@ -1112,35 +1233,36 @@ static lv_obj_tree_walk_res_t blur_walk_cb(lv_obj_t * obj, void * user_data)
         /*Not on the area of interest, skip it*/
         return LV_OBJ_TREE_WALK_SKIP_CHILDREN;
     }
-
 }
 
 lv_result_t lv_obj_invalidate_area(const lv_obj_t * obj, const lv_area_t * area)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
-    lv_display_t * disp   = lv_obj_get_display(obj);
-    if(!lv_display_is_invalidation_enabled(disp)) return LV_RESULT_INVALID;
+    lv_display_t * disp = lv_obj_get_display(obj);
+    if(!lv_display_is_invalidation_enabled(disp))
+        return LV_RESULT_INVALID;
 
     lv_area_t area_tmp;
     lv_area_copy(&area_tmp, area);
 
     lv_result_t res = invalidate_area_core(obj, &area_tmp);
-    if(res == LV_RESULT_INVALID) return res;
+    if(res == LV_RESULT_INVALID)
+        return res;
 
     /*If this area is on a blurred widget, invalidate that widget too*/
     blur_walk_data_t blur_walk_data;
     blur_walk_data.requester_obj = obj;
     blur_walk_data.inv_area = &area_tmp;
     lv_obj_tree_walk(disp->act_scr, blur_walk_cb, &blur_walk_data);
-    if(disp->prev_scr) lv_obj_tree_walk(disp->prev_scr, blur_walk_cb, &blur_walk_data);
+    if(disp->prev_scr)
+        lv_obj_tree_walk(disp->prev_scr, blur_walk_cb, &blur_walk_data);
     lv_obj_tree_walk(disp->sys_layer, blur_walk_cb, &blur_walk_data);
     lv_obj_tree_walk(disp->top_layer, blur_walk_cb, &blur_walk_data);
     lv_obj_tree_walk(disp->bottom_layer, blur_walk_cb, &blur_walk_data);
 
     return res;
 }
-
 
 lv_result_t lv_obj_invalidate(const lv_obj_t * obj)
 {
@@ -1162,15 +1284,14 @@ lv_result_t lv_obj_invalidate(const lv_obj_t * obj)
 
 bool lv_obj_area_is_visible(const lv_obj_t * obj, lv_area_t * area)
 {
-    if(lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return false;
+    if(lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN))
+        return false;
 
     /*Invalidate the object only if it belongs to the current or previous or one of the layers'*/
     lv_obj_t * obj_scr = lv_obj_get_screen(obj);
-    lv_display_t * disp   = lv_obj_get_display(obj_scr);
-    if(obj_scr != lv_display_get_screen_active(disp) &&
-       obj_scr != lv_display_get_screen_prev(disp) &&
-       obj_scr != lv_display_get_layer_bottom(disp) &&
-       obj_scr != lv_display_get_layer_top(disp) &&
+    lv_display_t * disp = lv_obj_get_display(obj_scr);
+    if(obj_scr != lv_display_get_screen_active(disp) && obj_scr != lv_display_get_screen_prev(disp) &&
+       obj_scr != lv_display_get_layer_bottom(disp) && obj_scr != lv_display_get_layer_top(disp) &&
        obj_scr != lv_display_get_layer_sys(disp)) {
         return false;
     }
@@ -1182,7 +1303,8 @@ bool lv_obj_area_is_visible(const lv_obj_t * obj, lv_area_t * area)
     lv_area_increase(&obj_coords, ext_size, ext_size);
 
     /*The area is not on the object*/
-    if(!lv_area_intersect(area, area, &obj_coords)) return false;
+    if(!lv_area_intersect(area, area, &obj_coords))
+        return false;
 
     if(is_transformed(obj)) {
         lv_obj_get_transformed_area(obj, area, LV_OBJ_POINT_TRANSFORM_FLAG_RECURSIVE);
@@ -1192,7 +1314,8 @@ bool lv_obj_area_is_visible(const lv_obj_t * obj, lv_area_t * area)
     lv_obj_t * parent = lv_obj_get_parent(obj);
     while(parent != NULL) {
         /*If the parent is hidden then the child is hidden and won't be drawn*/
-        if(lv_obj_has_flag(parent, LV_OBJ_FLAG_HIDDEN)) return false;
+        if(lv_obj_has_flag(parent, LV_OBJ_FLAG_HIDDEN))
+            return false;
 
         /*Truncate to the parent and if no common parts break*/
         lv_area_t parent_coords = parent->coords;
@@ -1204,7 +1327,8 @@ bool lv_obj_area_is_visible(const lv_obj_t * obj, lv_area_t * area)
         if(is_transformed(parent)) {
             lv_obj_get_transformed_area(parent, &parent_coords, LV_OBJ_POINT_TRANSFORM_FLAG_RECURSIVE);
         }
-        if(!lv_area_intersect(area, area, &parent_coords)) return false;
+        if(!lv_area_intersect(area, area, &parent_coords))
+            return false;
 
         parent = lv_obj_get_parent(parent);
     }
@@ -1245,12 +1369,14 @@ void lv_obj_get_click_area(const lv_obj_t * obj, lv_area_t * area)
 
 bool lv_obj_hit_test(lv_obj_t * obj, const lv_point_t * point)
 {
-    if(!lv_obj_has_flag(obj, LV_OBJ_FLAG_CLICKABLE)) return false;
+    if(!lv_obj_has_flag(obj, LV_OBJ_FLAG_CLICKABLE))
+        return false;
 
     lv_area_t a;
     lv_obj_get_click_area(obj, &a);
     bool res = lv_area_is_point_on(&a, point, 0);
-    if(res == false) return false;
+    if(res == false)
+        return false;
 
     if(lv_obj_has_flag(obj, LV_OBJ_FLAG_ADV_HITTEST)) {
         lv_hit_test_info_t hit_info;
@@ -1265,15 +1391,19 @@ bool lv_obj_hit_test(lv_obj_t * obj, const lv_point_t * point)
 
 int32_t lv_clamp_width(int32_t width, int32_t min_width, int32_t max_width, int32_t ref_width)
 {
-    if(LV_COORD_IS_PCT(min_width)) min_width = (ref_width * LV_COORD_GET_PCT(min_width)) / 100;
-    if(LV_COORD_IS_PCT(max_width)) max_width = (ref_width * LV_COORD_GET_PCT(max_width)) / 100;
+    if(LV_COORD_IS_PCT(min_width))
+        min_width = (ref_width * LV_COORD_GET_PCT(min_width)) / 100;
+    if(LV_COORD_IS_PCT(max_width))
+        max_width = (ref_width * LV_COORD_GET_PCT(max_width)) / 100;
     return LV_CLAMP(min_width, width, max_width);
 }
 
 int32_t lv_clamp_height(int32_t height, int32_t min_height, int32_t max_height, int32_t ref_height)
 {
-    if(LV_COORD_IS_PCT(min_height)) min_height = (ref_height * LV_COORD_GET_PCT(min_height)) / 100;
-    if(LV_COORD_IS_PCT(max_height)) max_height = (ref_height * LV_COORD_GET_PCT(max_height)) / 100;
+    if(LV_COORD_IS_PCT(min_height))
+        min_height = (ref_height * LV_COORD_GET_PCT(min_height)) / 100;
+    if(LV_COORD_IS_PCT(max_height))
+        max_height = (ref_height * LV_COORD_GET_PCT(max_height)) / 100;
     return LV_CLAMP(min_height, height, max_height);
 }
 
@@ -1365,13 +1495,14 @@ const lv_matrix_t * lv_obj_get_transform(const lv_obj_t * obj)
 static bool is_transformed(const lv_obj_t * obj)
 {
     while(obj) {
-        if(obj->spec_attr && obj->spec_attr->layer_type == LV_LAYER_TYPE_TRANSFORM) return true;
+        if(obj->spec_attr && obj->spec_attr->layer_type == LV_LAYER_TYPE_TRANSFORM)
+            return true;
         obj = obj->parent;
     }
     return false;
 }
 
-static int32_t calc_content_width(lv_obj_t * obj)
+static int32_t calc_content_width(const lv_obj_t * obj)
 {
     int32_t scroll_x_tmp = lv_obj_get_scroll_x(obj);
     if(obj->spec_attr) obj->spec_attr->scroll.x = 0;
@@ -1406,7 +1537,8 @@ static int32_t calc_content_width(lv_obj_t * obj)
                         case LV_ALIGN_BOTTOM_RIGHT:
                         case LV_ALIGN_RIGHT_MID:
                             /*Normal right aligns. Other are ignored due to possible circular dependencies*/
-                            child_res_tmp = obj->coords.x2 - child->coords.x1 + 1;
+                            /*Compensate: child coords already include the scroll offset*/
+                            child_res_tmp = obj->coords.x2 - child->coords.x1 + 1 - scroll_x_tmp;
                             break;
                         default:
                             /* Consider other cases only if x=0 and use the width of the object.
@@ -1419,7 +1551,8 @@ static int32_t calc_content_width(lv_obj_t * obj)
                     }
                 }
                 else {
-                    child_res_tmp = obj->coords.x2 - child->coords.x1 + 1;
+                    /*Compensate: child coords already include the scroll offset*/
+                    child_res_tmp = obj->coords.x2 - child->coords.x1 + 1 - scroll_x_tmp;
                 }
                 child_res = LV_MAX(child_res, child_res_tmp + lv_obj_get_style_margin_left(child, LV_PART_MAIN));
             }
@@ -1434,8 +1567,12 @@ static int32_t calc_content_width(lv_obj_t * obj)
                 lv_obj_t * child = obj->spec_attr->children[i];
                 if(lv_obj_has_flag_any(child,  LV_OBJ_FLAG_HIDDEN | LV_OBJ_FLAG_FLOATING)) continue;
 
-                if(child->w_ignore_size)
+                if(child->w_ignore_size) {
+                    LV_LOG_TRACE("Child '%s' has w_ignore_size set, ignoring in content width calculation, width = %d",
+                                 LV_OBJ_NAME(child),
+                                 lv_obj_get_width(child));
                     continue;
+                }
 
                 if(!lv_obj_is_layout_positioned(child)) {
                     lv_align_t align = lv_obj_get_style_align(child, LV_PART_MAIN);
@@ -1445,7 +1582,8 @@ static int32_t calc_content_width(lv_obj_t * obj)
                         case LV_ALIGN_BOTTOM_LEFT:
                         case LV_ALIGN_LEFT_MID:
                             /*Normal left aligns.*/
-                            child_res_tmp = child->coords.x2 - obj->coords.x1 + 1;
+                            /*Compensate: child coords already include the scroll offset*/
+                            child_res_tmp = child->coords.x2 - obj->coords.x1 + 1 + scroll_x_tmp;
                             break;
                         default:
                             /* Consider other cases only if x=0 and use the width of the object.
@@ -1458,7 +1596,9 @@ static int32_t calc_content_width(lv_obj_t * obj)
                     }
                 }
                 else {
-                    child_res_tmp = child->coords.x2 - obj->coords.x1 + 1;
+                    /*Compensate: child coords already include the scroll offset*/
+                    child_res_tmp = child->coords.x2 - obj->coords.x1 + 1 + scroll_x_tmp;
+                    LV_LOG_TRACE("Child '%s' is layout positioned, width = %d", LV_OBJ_NAME(child), lv_obj_get_width(child));
                 }
 
                 child_res = LV_MAX(child_res, child_res_tmp + lv_obj_get_style_margin_right(child, LV_PART_MAIN));
@@ -1481,7 +1621,7 @@ static int32_t calc_content_width(lv_obj_t * obj)
     return LV_MAX(child_res, self_w);
 }
 
-static int32_t calc_content_height(lv_obj_t * obj)
+static int32_t calc_content_height(const lv_obj_t * obj)
 {
     int32_t scroll_y_tmp = lv_obj_get_scroll_y(obj);
     if(obj->spec_attr) obj->spec_attr->scroll.y = 0;
@@ -1503,8 +1643,12 @@ static int32_t calc_content_height(lv_obj_t * obj)
             if(lv_obj_has_flag_any(child, LV_OBJ_FLAG_HIDDEN | LV_OBJ_FLAG_FLOATING))
                 continue;
 
-            if(child->h_ignore_size)
+            if(child->h_ignore_size) {
+                LV_LOG_TRACE("Child '%s' has h_ignore_size set, ignoring in content height calculation, height = %d",
+                             LV_OBJ_NAME(child),
+                             lv_obj_get_height(child));
                 continue;
+            }
 
             if(!lv_obj_is_layout_positioned(child)) {
                 lv_align_t align = lv_obj_get_style_align(child, LV_PART_MAIN);
@@ -1514,7 +1658,8 @@ static int32_t calc_content_height(lv_obj_t * obj)
                     case LV_ALIGN_TOP_MID:
                     case LV_ALIGN_TOP_LEFT:
                         /*Normal top aligns. */
-                        child_res_tmp = child->coords.y2 - obj->coords.y1 + 1;
+                        /*Compensate: child coords already include the scroll offset*/
+                        child_res_tmp = child->coords.y2 - obj->coords.y1 + 1 + scroll_y_tmp;
                         break;
                     default:
                         /* Consider other cases only if y=0 and use the height of the object.
@@ -1527,7 +1672,9 @@ static int32_t calc_content_height(lv_obj_t * obj)
                 }
             }
             else {
-                child_res_tmp = child->coords.y2 - obj->coords.y1 + 1;
+                /*Compensate: child coords already include the scroll offset*/
+                child_res_tmp = child->coords.y2 - obj->coords.y1 + 1 + scroll_y_tmp;
+                LV_LOG_TRACE("Child '%s' is layout positioned, height = %d", LV_OBJ_NAME(child), lv_obj_get_height(child));
             }
 
             child_res = LV_MAX(child_res, child_res_tmp + lv_obj_get_style_margin_bottom(child, LV_PART_MAIN));
@@ -1552,14 +1699,19 @@ static int32_t calc_content_height(lv_obj_t * obj)
 static void layout_update_core(lv_obj_t * obj)
 {
     /*Skip subtrees that have no pending layout work.
-     *scr_layout_inv is propagated from dirty objects up to the screen
+     *subtree_layout_inv is propagated from dirty objects up to the screen
      *by lv_obj_mark_layout_as_dirty, so a clear flag means the entire
      *subtree is clean.*/
-    if(!obj->layout_inv && !obj->readjust_scroll_after_layout && !obj->scr_layout_inv) {
+    if(!obj->layout_inv && !obj->readjust_scroll_after_layout && !obj->subtree_layout_inv) {
+        return;
+    }
+
+    if(lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) {
         return;
     }
 
     LV_PROFILER_LAYOUT_BEGIN;
+    LV_LOG_TRACE("Updating layout of object '%s'", LV_OBJ_NAME(obj));
     uint32_t child_cnt = obj->spec_attr ? obj->spec_attr->child_cnt : 0;
     uint32_t i;
     for(i = 0; i < child_cnt; i++) {
@@ -1583,17 +1735,19 @@ static void layout_update_core(lv_obj_t * obj)
 
     /*Recompute the subtree flag: keep it set only if a child
      *was (re-)dirtied during the processing above.*/
-    if(obj->scr_layout_inv) {
+    if(obj->subtree_layout_inv) {
         bool child_dirty = false;
         for(i = 0; i < child_cnt; i++) {
             lv_obj_t * child = obj->spec_attr->children[i];
-            if(child->layout_inv || child->readjust_scroll_after_layout || child->scr_layout_inv) {
+            if(lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN))
+                continue;
+            if(child->layout_inv || child->readjust_scroll_after_layout || child->subtree_layout_inv) {
                 child_dirty = true;
                 break;
             }
         }
         if(!child_dirty && !obj->layout_inv && !obj->readjust_scroll_after_layout) {
-            obj->scr_layout_inv = 0;
+            obj->subtree_layout_inv = 0;
         }
     }
 
