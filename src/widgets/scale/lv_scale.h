@@ -76,6 +76,7 @@ enum _lv_property_scale_id_t {
     LV_PROPERTY_ID(SCALE, ROTATION,           LV_PROPERTY_TYPE_INT,   5),
     LV_PROPERTY_ID(SCALE, RANGE_MIN_VALUE,    LV_PROPERTY_TYPE_INT,   6),
     LV_PROPERTY_ID(SCALE, RANGE_MAX_VALUE,    LV_PROPERTY_TYPE_INT,   7),
+    LV_PROPERTY_ID(SCALE, CENTER_ALIGN,       LV_PROPERTY_TYPE_INT,   8),
     LV_PROPERTY_SCALE_END,
 };
 #endif
@@ -178,6 +179,15 @@ void lv_scale_set_angle_range(lv_obj_t * obj, uint32_t angle_range);
  *                      - 390 = 4 o'clock
  */
 void lv_scale_set_rotation(lv_obj_t * obj, int32_t rotation);
+
+/**
+ * Set how a round scale circle is aligned within the object bounds.
+ * This controls where the center of the circle is placed when the object
+ * is not square. Defaults to LV_ALIGN_DEFAULT (top-left behaviour).
+ * @param obj       pointer to Scale Widget
+ * @param align     an LV_ALIGN_* value (OUT variants are not supported)
+ */
+void lv_scale_set_center_align(lv_obj_t * obj, lv_align_t align);
 
 /**
  * Point line needle to specified value.
@@ -330,6 +340,13 @@ int32_t lv_scale_get_major_tick_every(lv_obj_t * obj);
  * @return      Scale low end angular location
  */
 int32_t lv_scale_get_rotation(lv_obj_t * obj);
+
+/**
+ * Get the current round scale center alignment within the object bounds.
+ * @param obj   pointer to Scale Widget
+ * @return      the current center alignment
+ */
+lv_align_t lv_scale_get_center_align(lv_obj_t * obj);
 
 /**
  * Gets label visibility

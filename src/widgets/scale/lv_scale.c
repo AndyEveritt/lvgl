@@ -126,6 +126,11 @@ static const lv_property_ops_t lv_scale_properties[] = {
         .setter = lv_scale_set_max_value,
         .getter = lv_scale_get_range_max_value,
     },
+    {
+        .id = LV_PROPERTY_SCALE_CENTER_ALIGN,
+        .setter = lv_scale_set_center_align,
+        .getter = lv_scale_get_center_align,
+    },
 };
 #endif
 
@@ -271,6 +276,15 @@ void lv_scale_set_rotation(lv_obj_t * obj, int32_t rotation)
     }
 
     scale->rotation = normalized_angle;
+    lv_obj_invalidate(obj);
+}
+
+void lv_scale_set_center_align(lv_obj_t * obj, lv_align_t align)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    lv_scale_t * scale = (lv_scale_t *)obj;
+    if((lv_align_t)scale->center_align == align) return;
+    scale->center_align = (uint32_t)align;
     lv_obj_invalidate(obj);
 }
 
@@ -556,6 +570,12 @@ int32_t lv_scale_get_rotation(lv_obj_t * obj)
     return scale->rotation;
 }
 
+lv_align_t lv_scale_get_center_align(lv_obj_t * obj)
+{
+    lv_scale_t * scale = (lv_scale_t *)obj;
+    return (lv_align_t)scale->center_align;
+}
+
 bool lv_scale_get_label_show(lv_obj_t * obj)
 {
     lv_scale_t * scale = (lv_scale_t *)obj;
@@ -639,6 +659,7 @@ static void lv_scale_constructor(const lv_obj_class_t * class_p, lv_obj_t * obj)
     scale->label_enabled = LV_SCALE_LABEL_ENABLED_DEFAULT;
     scale->angle_range = LV_SCALE_DEFAULT_ANGLE_RANGE;
     scale->rotation = LV_SCALE_DEFAULT_ROTATION;
+    scale->center_align = LV_ALIGN_DEFAULT;
     scale->range_min = 0;
     scale->range_max = 100;
     scale->last_tick_width = 0;
@@ -1260,10 +1281,54 @@ static void scale_get_center(const lv_obj_t * obj, lv_point_t * center, int32_t 
     int32_t top_bg = lv_obj_get_style_pad_top(obj, LV_PART_MAIN);
     int32_t bottom_bg = lv_obj_get_style_pad_bottom(obj, LV_PART_MAIN);
 
-    int32_t r = (LV_MIN(lv_obj_get_width(obj) - left_bg - right_bg, lv_obj_get_height(obj) - top_bg - bottom_bg)) / 2;
+    int32_t inner_w = lv_obj_get_width(obj) - left_bg - right_bg;
+    int32_t inner_h = lv_obj_get_height(obj) - top_bg - bottom_bg;
+    int32_t r = LV_MIN(inner_w, inner_h) / 2;
 
-    center->x = obj->coords.x1 + r + left_bg;
-    center->y = obj->coords.y1 + r + top_bg;
+    int32_t cx, cy;
+    switch((lv_align_t)((const lv_scale_t *)obj)->center_align) {
+        case LV_ALIGN_TOP_MID:
+            cx = left_bg + inner_w / 2;
+            cy = top_bg + r;
+            break;
+        case LV_ALIGN_TOP_RIGHT:
+            cx = left_bg + inner_w - r;
+            cy = top_bg + r;
+            break;
+        case LV_ALIGN_LEFT_MID:
+            cx = left_bg + r;
+            cy = top_bg + inner_h / 2;
+            break;
+        case LV_ALIGN_CENTER:
+            cx = left_bg + inner_w / 2;
+            cy = top_bg + inner_h / 2;
+            break;
+        case LV_ALIGN_RIGHT_MID:
+            cx = left_bg + inner_w - r;
+            cy = top_bg + inner_h / 2;
+            break;
+        case LV_ALIGN_BOTTOM_LEFT:
+            cx = left_bg + r;
+            cy = top_bg + inner_h - r;
+            break;
+        case LV_ALIGN_BOTTOM_MID:
+            cx = left_bg + inner_w / 2;
+            cy = top_bg + inner_h - r;
+            break;
+        case LV_ALIGN_BOTTOM_RIGHT:
+            cx = left_bg + inner_w - r;
+            cy = top_bg + inner_h - r;
+            break;
+        case LV_ALIGN_DEFAULT:
+        case LV_ALIGN_TOP_LEFT:
+        default:
+            cx = left_bg + r;
+            cy = top_bg + r;
+            break;
+    }
+
+    center->x = obj->coords.x1 + cx;
+    center->y = obj->coords.y1 + cy;
 
     if(arc_r) *arc_r = r;
 }

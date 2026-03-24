@@ -118,18 +118,22 @@ static const lv_property_ops_t lv_arc_properties[] = {
         .setter = lv_arc_set_knob_offset,
         .getter = lv_arc_get_knob_offset,
     },
+    {
+        .id = LV_PROPERTY_ARC_CENTER_ALIGN,
+        .setter = lv_arc_set_center_align,
+        .getter = lv_arc_get_center_align,
+    },
 };
-#endif
+#  endif
 
-const lv_obj_class_t lv_arc_class  = {
-    .constructor_cb = lv_arc_constructor,
-    .event_cb = lv_arc_event,
-    .instance_size = sizeof(lv_arc_t),
-    .editable = LV_OBJ_CLASS_EDITABLE_TRUE,
-    .base_class = &lv_obj_class,
-    .name = "lv_arc",
-    LV_PROPERTY_CLASS_FIELDS(arc, ARC)
-};
+const lv_obj_class_t lv_arc_class = {.constructor_cb = lv_arc_constructor,
+                                     .event_cb = lv_arc_event,
+                                     .instance_size = sizeof(lv_arc_t),
+                                     .editable = LV_OBJ_CLASS_EDITABLE_TRUE,
+                                     .base_class = &lv_obj_class,
+                                     .name = "lv_arc",
+                                     LV_PROPERTY_CLASS_FIELDS(arc, ARC)
+                                    };
 
 /**********************
  *      MACROS
@@ -437,6 +441,22 @@ uint32_t lv_arc_get_change_rate(lv_obj_t * obj)
     return ((lv_arc_t *)obj)->chg_rate;
 }
 
+void lv_arc_set_center_align(lv_obj_t * obj, lv_align_t align)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    lv_arc_t * arc = (lv_arc_t *)obj;
+    if((lv_align_t)arc->center_align == align)
+        return;
+    arc->center_align = (uint32_t)align;
+    lv_obj_invalidate(obj);
+}
+
+lv_align_t lv_arc_get_center_align(const lv_obj_t * obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    return (lv_align_t)((const lv_arc_t *)obj)->center_align;
+}
+
 /*=====================
  * Other functions
  *====================*/
@@ -535,6 +555,7 @@ static void lv_arc_constructor(const lv_obj_class_t * class_p, lv_obj_t * obj)
     arc->last_tick = lv_tick_get();
     arc->last_angle = arc->indic_angle_end;
     arc->in_out = CLICK_OUTSIDE_BG_ANGLES;
+    arc->center_align = LV_ALIGN_DEFAULT;
 
     lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLL_CHAIN | LV_OBJ_FLAG_SCROLLABLE);
@@ -925,11 +946,54 @@ static void get_center(const lv_obj_t * obj, lv_point_t * center, int32_t * arc_
     int32_t top_bg = lv_obj_get_style_pad_top(obj, LV_PART_MAIN);
     int32_t bottom_bg = lv_obj_get_style_pad_bottom(obj, LV_PART_MAIN);
 
-    int32_t r = (LV_MIN(lv_obj_get_width(obj) - left_bg - right_bg,
-                        lv_obj_get_height(obj) - top_bg - bottom_bg)) / 2;
+    int32_t inner_w = lv_obj_get_width(obj) - left_bg - right_bg;
+    int32_t inner_h = lv_obj_get_height(obj) - top_bg - bottom_bg;
+    int32_t r = LV_MIN(inner_w, inner_h) / 2;
 
-    center->x = obj->coords.x1 + r + left_bg;
-    center->y = obj->coords.y1 + r + top_bg;
+    int32_t cx, cy;
+    switch((lv_align_t)((const lv_arc_t *)obj)->center_align) {
+        case LV_ALIGN_TOP_MID:
+            cx = left_bg + inner_w / 2;
+            cy = top_bg + r;
+            break;
+        case LV_ALIGN_TOP_RIGHT:
+            cx = left_bg + inner_w - r;
+            cy = top_bg + r;
+            break;
+        case LV_ALIGN_LEFT_MID:
+            cx = left_bg + r;
+            cy = top_bg + inner_h / 2;
+            break;
+        case LV_ALIGN_CENTER:
+            cx = left_bg + inner_w / 2;
+            cy = top_bg + inner_h / 2;
+            break;
+        case LV_ALIGN_RIGHT_MID:
+            cx = left_bg + inner_w - r;
+            cy = top_bg + inner_h / 2;
+            break;
+        case LV_ALIGN_BOTTOM_LEFT:
+            cx = left_bg + r;
+            cy = top_bg + inner_h - r;
+            break;
+        case LV_ALIGN_BOTTOM_MID:
+            cx = left_bg + inner_w / 2;
+            cy = top_bg + inner_h - r;
+            break;
+        case LV_ALIGN_BOTTOM_RIGHT:
+            cx = left_bg + inner_w - r;
+            cy = top_bg + inner_h - r;
+            break;
+        case LV_ALIGN_DEFAULT:
+        case LV_ALIGN_TOP_LEFT:
+        default:
+            cx = left_bg + r;
+            cy = top_bg + r;
+            break;
+    }
+
+    center->x = obj->coords.x1 + cx;
+    center->y = obj->coords.y1 + cy;
 
     if(arc_r) *arc_r = r;
 }

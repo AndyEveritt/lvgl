@@ -52,6 +52,7 @@ enum _lv_property_arc_id_t {
     LV_PROPERTY_ID(ARC, MAX_VALUE,          LV_PROPERTY_TYPE_INT,       8),
     LV_PROPERTY_ID(ARC, CHANGE_RATE,        LV_PROPERTY_TYPE_INT,       9),
     LV_PROPERTY_ID(ARC, KNOB_OFFSET,        LV_PROPERTY_TYPE_INT,       10),
+    LV_PROPERTY_ID(ARC, CENTER_ALIGN, LV_PROPERTY_TYPE_INT, 11),
     LV_PROPERTY_ARC_END,
 };
 #endif
@@ -176,6 +177,15 @@ void lv_arc_set_change_rate(lv_obj_t * obj, uint32_t rate);
  */
 void lv_arc_set_knob_offset(lv_obj_t * obj, int32_t offset);
 
+/**
+ * Set how the arc circle is aligned within the object bounds.
+ * This controls where the center of the arc is placed when the object
+ * is not square. Defaults to LV_ALIGN_DEFAULT (top-left behaviour).
+ * @param obj       pointer to an arc object
+ * @param align     an LV_ALIGN_* value (OUT variants are not supported)
+ */
+void lv_arc_set_center_align(lv_obj_t * obj, lv_align_t align);
+
 /*=====================
  * Getter functions
  *====================*/
@@ -249,6 +259,13 @@ int32_t lv_arc_get_rotation(const lv_obj_t * obj);
  * @return          arc's current knob offset
  */
 int32_t lv_arc_get_knob_offset(const lv_obj_t * obj);
+
+/**
+ * Get the current arc center alignment within the object bounds.
+ * @param obj       pointer to an arc object
+ * @return          the current center alignment
+ */
+lv_align_t lv_arc_get_center_align(const lv_obj_t * obj);
 
 /**
  * Get the change rate of an arc

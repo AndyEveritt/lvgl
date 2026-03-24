@@ -75,6 +75,7 @@ struct _lv_scale_t {
     uint32_t post_draw          : 1;   /**< false: drawing occurs during LV_EVENT_DRAW_MAIN;
                                         *   true : drawing occurs during LV_EVENT_DRAW_POST. */
     uint32_t draw_ticks_on_top  : 1;   /**< Draw ticks on top of main line? */
+    uint32_t center_align       : 4;   /**< How the round scale circle is positioned within object bounds (lv_align_t) */
     /* Round scale */
     uint32_t angle_range;              /**< Degrees between low end and high end of scale */
     int32_t rotation;                  /**< Clockwise angular offset from 3-o'clock position of low end of scale */

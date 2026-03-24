@@ -36,10 +36,11 @@ struct _lv_arc_t {
     int32_t value;              /**< Current value of the arc */
     int32_t min_value;          /**< Minimum value of the arc */
     int32_t max_value;          /**< Maximum value of the arc */
-    uint32_t dragging    : 1;
-    uint32_t type        : 2;
-    uint32_t min_close   : 1;   /**< 1: the last pressed angle was closer to minimum end */
-    uint32_t in_out      : 1;   /**< 1: The click was within the background arc angles. 0: Click outside */
+    uint32_t dragging : 1;
+    uint32_t type : 2;
+    uint32_t min_close : 1;     /**< 1: the last pressed angle was closer to minimum end */
+    uint32_t in_out : 1;        /**< 1: The click was within the background arc angles. 0: Click outside */
+    uint32_t center_align : 4;  /**< How the arc circle is positioned within the object bounds (lv_align_t) */
     uint32_t chg_rate;          /**< Drag angle rate of change of the arc (degrees/sec) */
     uint32_t last_tick;         /**< Last dragging event timestamp of the arc */
     lv_value_precise_t last_angle;  /**< Last dragging angle of the arc */
